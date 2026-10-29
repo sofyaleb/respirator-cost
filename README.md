@@ -7,4 +7,4 @@ A rough calculator for what it costs to equip healthcare and critical workers wi
 
 **Status: v1. Every number is a placeholder.**
 
-`assumptions.js` holds every number the estimator uses, plus the country and scenario presets. Each assumption has low, mid and high values. To update one, change its values and add `source` and `checked`. The page's assumptions table shows them automatically. `index.html` holds the model and the page.
+`assumptions.js` holds every number the estimator uses, plus the country and scenario presets. Each assumption has low, mid and high values. To update one, change its values and add `source` and `checked`. The page's assumptions table shows them automatically. `index.html` holds the model and the page. After changing `assumptions.js`, bump the `?v=` number where the pages load it, so browsers fetch the new copy.
