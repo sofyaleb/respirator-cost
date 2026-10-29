@@ -44,3 +44,8 @@ const SCENARIOS = {
   p2020: { months: 12, hcw: true, crit: true, pub: false, pubShare: 0.5 },
   severe: { months: 18, hcw: true, crit: true, pub: true, pubShare: 0.5 },
 };
+
+// Simple estimator (index.html): share of the population who are patient-facing healthcare workers,
+// for a country we know nothing about except its population. Treated as log-normal:
+// `median` is the middle estimate, `low90` and `high90` bound the 90% interval.
+const HCW_ESTIMATE = { median: 0.015, low90: 0.005, high90: 0.045 };

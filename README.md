@@ -2,7 +2,8 @@
 
 A rough calculator for what it costs to equip healthcare and critical workers with respirators. Start from a population, a number of masks or a budget.
 
-- Estimator: https://sofyaleb.github.io/respirator-cost/
+- Estimator: https://sofyaleb.github.io/respirator-cost/ (one question: population in, healthcare worker estimate out)
+- Full calculator (unlinked draft): `calculator.html`
 
 **Status: v1. Every number is a placeholder.**
 
