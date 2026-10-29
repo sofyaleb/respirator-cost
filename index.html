@@ -1,0 +1,605 @@
+<title>Respirator Cost Estimator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Rough estimate of what it costs to equip healthcare and critical workers with respirators, by country, mask count or budget.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: settings card on the left, results on the right (stacked on phones). Assumptions table full width below. Tokens match the respirator explainer. */
+  :root {
+    --bg: #f4f6f6; --surface: #ffffff; --ink: #142024; --ink-soft: #5a686d; --line: #dde3e4;
+    --accent: #0e7c74; --accent-soft: #d5ecea; --filter: #d98a1c; --papr: #6b5bb0; --dot: #dfe5e6;
+    --warn-soft: #fbefdc;
+    --font: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1517; --surface: #172023; --ink: #e9efef; --ink-soft: #95a3a7; --line: #273235;
+      --accent: #3cc2b5; --accent-soft: #163b38; --filter: #f0a83c; --papr: #a99bff; --dot: #263235;
+      --warn-soft: #33270f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1517; --surface: #172023; --ink: #e9efef; --ink-soft: #95a3a7; --line: #273235;
+    --accent: #3cc2b5; --accent-soft: #163b38; --filter: #f0a83c; --papr: #a99bff; --dot: #263235;
+    --warn-soft: #33270f;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 72rem; margin-inline: auto; padding-block: 1.5rem 4rem; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 2rem; }
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 1rem; font-size: .875rem; flex-wrap: wrap; }
+  .brand { font-weight: 600; letter-spacing: -.01em; }
+  .links { display: flex; gap: 1.1rem; flex-wrap: wrap; }
+  .links a { color: var(--ink-soft); text-decoration: none; border-bottom: 1px solid var(--line); padding-bottom: 1px; }
+  .links a:hover, .links a:focus-visible { color: var(--ink); border-color: var(--ink); }
+  .links a[aria-current="page"] { color: var(--ink); border-color: transparent; }
+  header { display: grid; gap: .8rem; }
+  h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.05; letter-spacing: -.03em; font-weight: 500; margin: 0; text-wrap: balance; max-width: 20ch; }
+  .lede { color: var(--ink-soft); max-width: 58ch; margin: 0; }
+  .banner { background: var(--warn-soft); border-radius: 12px; padding: .6rem .9rem; font-size: .9rem; justify-self: start; max-width: 62ch; }
+  .banner b { font-weight: 600; }
+  h2 { font-size: 1.35rem; font-weight: 500; letter-spacing: -.02em; line-height: 1.2; margin: 0; text-wrap: balance; }
+  .label { font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; }
+
+  .app { display: grid; grid-template-columns: minmax(0, 23rem) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+  @media (max-width: 860px) { .app { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border-radius: 20px; padding: 1.3rem; box-shadow: 0 1px 2px rgba(20,32,36,.04), 0 8px 24px rgba(20,32,36,.05); min-width: 0; }
+
+  /* settings */
+  .settings { display: grid; gap: 1.25rem; }
+  .field { display: grid; gap: .45rem; min-width: 0; }
+  .field > label, .field legend { font-size: .85rem; font-weight: 600; padding: 0; }
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  .hint { font-size: .8rem; color: var(--ink-soft); margin: 0; }
+  input[type="number"], input[type="text"], select {
+    font: inherit; font-size: .95rem; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: .5rem .7rem; width: 100%; min-width: 0; font-variant-numeric: tabular-nums;
+  }
+  input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .seg { display: flex; flex-wrap: wrap; gap: .35rem; }
+  .seg input, .types input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg label { padding: .4rem .8rem; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; font-size: .875rem; user-select: none; }
+  .seg label:hover { border-color: var(--ink-soft); }
+  .seg input:checked + label { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+  .seg input:focus-visible + label, .types input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .modes label { font-size: .9rem; }
+  .checks { display: grid; gap: .4rem; }
+  .checks label { display: flex; gap: .55rem; align-items: baseline; font-size: .9rem; cursor: pointer; }
+  .checks input { accent-color: var(--accent); }
+  .checks .amt { margin-left: auto; color: var(--ink-soft); font-size: .8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .types { display: grid; gap: .4rem; }
+  .types label { display: grid; grid-template-columns: 10px 1fr auto; gap: .2rem .6rem; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: .55rem .75rem; cursor: pointer; font-size: .9rem; }
+  .types label:hover { border-color: var(--ink-soft); }
+  .types input:checked + label { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+  .types .sw { width: 10px; height: 10px; border-radius: 50%; }
+  .types .p { color: var(--ink-soft); font-size: .8rem; font-variant-numeric: tabular-nums; }
+  .types .d { grid-column: 2 / 4; font-size: .78rem; color: var(--ink-soft); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+  /* results */
+  .results { display: grid; gap: 1.25rem; min-width: 0; }
+  .headline { display: grid; gap: .5rem; }
+  .big { font-size: clamp(2.4rem, 6vw, 3.6rem); font-weight: 500; letter-spacing: -.035em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .sentence { font-size: 1.1rem; max-width: 52ch; margin: 0; text-wrap: pretty; }
+  .range { font-size: .9rem; color: var(--ink-soft); margin: 0; font-variant-numeric: tabular-nums; }
+  .rangebar { position: relative; height: 8px; border-radius: 4px; background: var(--dot); margin-top: .25rem; max-width: 26rem; }
+  .rangebar span { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: var(--accent-soft); }
+  .rangebar i { position: absolute; top: -4px; width: 3px; height: 16px; border-radius: 2px; background: var(--accent); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: 1px; background: var(--line); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
+  .stat { background: var(--surface); padding: .8rem .9rem; display: grid; gap: .15rem; align-content: start; }
+  .stat .v { font-size: 1.3rem; font-weight: 500; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .stat .k { font-size: .78rem; color: var(--ink-soft); line-height: 1.35; }
+  .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.25rem; }
+  @media (max-width: 1100px) { .two { grid-template-columns: 1fr; } }
+  .section { display: grid; gap: .8rem; align-content: start; }
+  .bars { display: grid; gap: .55rem; }
+  .bar { display: grid; grid-template-columns: minmax(0, 1fr) 4.5rem; gap: .2rem .7rem; font-size: .88rem; font-variant-numeric: tabular-nums; }
+  .bar .n { min-width: 0; }
+  .bar .val { text-align: right; }
+  .bar .t { grid-column: 1 / 3; height: 10px; border-radius: 5px; background: var(--dot); overflow: hidden; }
+  .bar .t span { display: block; height: 100%; background: var(--accent); border-radius: 5px; transition: width .4s cubic-bezier(.2,.7,.2,1); }
+  table { border-collapse: collapse; width: 100%; font-size: .88rem; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: .5rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 500; color: var(--ink-soft); font-size: .78rem; }
+  td.r, th.r { text-align: right; }
+  tr:last-child td { border-bottom: 0; }
+  tfoot td { font-weight: 600; border-top: 1px solid var(--ink-soft); }
+  .scroll { overflow-x: auto; }
+  .chart svg { width: 100%; height: auto; display: block; }
+  .chart text { fill: var(--ink-soft); font-family: var(--font); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .chart .gl { stroke: var(--line); stroke-width: 1; }
+  .legend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; font-size: .82rem; }
+  .legend span { display: inline-flex; align-items: center; gap: .4rem; }
+  .legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+  .note { font-size: .85rem; color: var(--ink-soft); margin: 0; max-width: 60ch; }
+  .actions { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+  .btn { font: inherit; font-size: .875rem; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: .45rem .95rem; cursor: pointer; }
+  .btn:hover { border-color: var(--ink-soft); }
+  .btn.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+  .toast { font-size: .82rem; color: var(--accent); }
+
+  /* assumptions */
+  .assume { display: grid; gap: 1rem; }
+  .assume-head { display: flex; justify-content: space-between; align-items: end; gap: 1rem; flex-wrap: wrap; }
+  .assume td input { width: 6.5rem; padding: .3rem .5rem; font-size: .88rem; }
+  .assume .grp td { font-size: .75rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 600; padding-top: 1.1rem; border-bottom: 0; }
+  .pill { display: inline-block; font-size: .72rem; padding: .1rem .5rem; border-radius: 999px; background: var(--warn-soft); white-space: nowrap; }
+  .pill.edited { background: var(--accent-soft); }
+  .unit { color: var(--ink-soft); font-size: .8rem; margin-left: .3rem; }
+  .formula { font-variant-numeric: tabular-nums; background: var(--accent-soft); border-radius: 12px; padding: .7rem .9rem; font-size: .88rem; line-height: 1.7; max-width: 62ch; }
+  @media (prefers-reduced-motion: reduce) { .bar .t span { transition: none; } }
+</style>
+
+<div class="wrap">
+  <nav class="top">
+    <span class="brand">Respirator Guide</span>
+    <span class="links">
+      <a href="https://sofyaleb.github.io/respirator-guide/" target="_blank" rel="noopener">Mask picker</a>
+      <a href="https://sofyaleb.github.io/respirator-guide/explain.html" target="_blank" rel="noopener">How protection works</a>
+      <a href="https://sofyaleb.github.io/respirator-guide/details.html" target="_blank" rel="noopener">Details</a>
+      <a href="./" aria-current="page">Cost estimator</a>
+    </span>
+  </nav>
+
+  <header>
+    <h1>What would it cost to protect your workforce?</h1>
+    <p class="lede">Choose a country or population, who needs protecting, for how long and with which respirator. You get a cost estimate, a range, and every assumption behind it.</p>
+    <p class="banner"><b>Rough draft (v1).</b> Every number on this page is a placeholder until it's replaced with researched figures. Use it to see how the costs are built up, not to quote totals.</p>
+  </header>
+
+  <div class="app">
+    <form class="card settings" id="settings" autocomplete="off">
+      <fieldset class="field">
+        <legend>Start from</legend>
+        <div class="seg modes">
+          <input type="radio" name="mode" id="m-country" value="country" checked><label for="m-country">A population</label>
+          <input type="radio" name="mode" id="m-masks" value="masks"><label for="m-masks">A number of masks</label>
+          <input type="radio" name="mode" id="m-budget" value="budget"><label for="m-budget">A budget</label>
+        </div>
+      </fieldset>
+
+      <div class="field" data-show="masks">
+        <label for="masks">How many respirators?</label>
+        <input type="number" id="masks" min="0" step="1000" value="100000">
+      </div>
+
+      <div class="field" data-show="budget">
+        <label for="budget">Budget (USD)</label>
+        <input type="number" id="budget" min="0" step="1000000" value="50000000">
+      </div>
+
+      <div class="field" data-show="country budget">
+        <label for="country">Country</label>
+        <select id="country"></select>
+        <label for="pop" class="hint" style="font-weight:400">Population</label>
+        <input type="number" id="pop" min="0" step="100000">
+      </div>
+
+      <div class="field" data-show="country budget">
+        <label for="scenario">Scenario</label>
+        <select id="scenario">
+          <option value="flu">Bad flu season: 4 months, healthcare workers</option>
+          <option value="p2020" selected>2020-style pandemic: 12 months, all workers</option>
+          <option value="severe">Severe pandemic: 18 months, workers + half the public</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+
+      <fieldset class="field" data-show="country budget">
+        <legend>Who gets respirators</legend>
+        <div class="checks">
+          <label><input type="checkbox" id="g-hcw" checked> Healthcare workers <span class="amt" id="n-hcw"></span></label>
+          <label><input type="checkbox" id="g-crit" checked> Other critical workers <span class="amt" id="n-crit"></span></label>
+          <label><input type="checkbox" id="g-pub"> General public <span class="amt" id="n-pub"></span></label>
+        </div>
+        <div id="pub-wrap" class="field" hidden>
+          <label for="pubShare" class="hint" style="font-weight:400">Share of the public covered: <b id="pubShareOut">50%</b></label>
+          <input type="range" id="pubShare" min="5" max="100" step="5" value="50">
+        </div>
+      </fieldset>
+
+      <div class="field">
+        <label for="months">How long (months): <b id="monthsOut">12</b></label>
+        <input type="range" id="months" min="1" max="36" step="1" value="12">
+      </div>
+
+      <fieldset class="field">
+        <legend>Respirator</legend>
+        <div class="types" id="types"></div>
+      </fieldset>
+
+      <fieldset class="field" id="reuse-wrap">
+        <legend>Disposable use policy</legend>
+        <div class="seg">
+          <input type="radio" name="reuse" id="r-strict" value="strict"><label for="r-strict">New per patient</label>
+          <input type="radio" name="reuse" id="r-shift" value="shift" checked><label for="r-shift">One per shift</label>
+          <input type="radio" name="reuse" id="r-extended" value="extended"><label for="r-extended">Extended reuse</label>
+        </div>
+      </fieldset>
+
+      <fieldset class="field">
+        <legend>When you buy</legend>
+        <div class="seg">
+          <input type="radio" name="buying" id="b-stock" value="stockpile" checked><label for="b-stock">Stockpile ahead</label>
+          <input type="radio" name="buying" id="b-out" value="outbreak"><label for="b-out">During an outbreak</label>
+        </div>
+        <p class="hint" id="buying-hint"></p>
+      </fieldset>
+    </form>
+
+    <section class="results" aria-live="polite">
+      <div class="card headline">
+        <span class="label" id="h-label">Estimated cost</span>
+        <div class="big" id="h-total">–</div>
+        <p class="sentence" id="h-sentence"></p>
+        <div class="rangebar" id="h-rangebar"><span></span><i></i></div>
+        <p class="range" id="h-range"></p>
+        <div class="actions">
+          <button type="button" class="btn primary" id="copy">Copy summary</button>
+          <span class="toast" id="toast" hidden></span>
+        </div>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div class="two">
+        <div class="card section">
+          <h2>Where the money goes</h2>
+          <div class="bars" id="breakdown"></div>
+        </div>
+        <div class="card section" id="groups-card">
+          <h2>By group</h2>
+          <div class="scroll"><table id="groups"></table></div>
+        </div>
+      </div>
+
+      <div class="card section chart" id="chart-card">
+        <h2>Cost over time, by respirator type</h2>
+        <p class="note">Same people, same assumptions, each type paid for month by month. Reusable respirators cost more on day one and less every month after.</p>
+        <div class="legend" id="legend"></div>
+        <div id="chart"></div>
+        <p class="note" id="crossover"></p>
+      </div>
+    </section>
+  </div>
+
+  <section class="card assume" id="assumptions">
+    <div class="assume-head">
+      <div style="display:grid;gap:.4rem">
+        <h2>Assumptions</h2>
+        <p class="note">Change any value and the estimate updates. The range uses the low and high values. Changing a value moves its range with it.</p>
+      </div>
+      <button type="button" class="btn" id="reset">Reset all</button>
+    </div>
+    <div class="formula">
+      people covered = population × group share<br>
+      disposables = people × shifts per month × months × masks per shift<br>
+      reusables = people × spares, plus filters each month<br>
+      total = respirators + filters + fit testing &amp; training + storage &amp; distribution
+    </div>
+    <div class="scroll"><table id="atable"></table></div>
+  </section>
+</div>
+
+<script src="assumptions.js"></script>
+<script>
+// Assumptions (A, COUNTRIES, SCENARIOS, HCW_BY_INCOME) come from assumptions.js.
+const AID = Object.fromEntries(A.map(a => [a.id, a]));
+const TYPES = {
+  disposable: { name: 'Disposable N95 / FFP2', short: 'disposable N95s', color: 'var(--filter)', desc: 'Cheap per unit, thrown away after use.', price: p => p.priceN95 },
+  elastomeric: { name: 'Elastomeric half-mask', short: 'elastomeric respirators', color: 'var(--accent)', desc: 'Reusable for years. Only the filters get replaced.', price: p => p.priceElasto },
+  papr: { name: 'PAPR', short: 'PAPRs', color: 'var(--papr)', desc: 'Battery-powered hood. No fit test needed, mostly for hospitals.', price: p => p.pricePAPR },
+};
+
+// ---------- State ----------
+const vals = Object.fromEntries(A.map(a => [a.id, a.mid]));
+const s = { mode: 'country', country: 'us', pop: 340e6, hcw: true, crit: true, pub: false, pubShare: 0.5, months: 12, type: 'elastomeric', reuse: 'shift', buying: 'stockpile', masks: 100000, budget: 50e6 };
+
+function setHcwBase(base) {
+  const a = AID.hcwShare; a.mid = base; a.low = base * 0.6; a.high = base * 1.4; vals.hcwShare = base;
+}
+function params(level) {
+  const p = {};
+  for (const a of A) p[a.id] = level === 'mid' ? vals[a.id] : a[level] * (vals[a.id] / a.mid);
+  return p;
+}
+
+// ---------- Model ----------
+function groupsOf(p) {
+  const g = [];
+  if (s.hcw) g.push({ key: 'hcw', label: 'Healthcare workers', n: s.pop * p.hcwShare, days: p.workDays, worker: true });
+  if (s.crit) g.push({ key: 'crit', label: 'Other critical workers', n: s.pop * p.critShare, days: p.workDays, worker: true });
+  if (s.pub) g.push({ key: 'pub', label: 'General public', n: s.pop * Math.max(0, 1 - p.hcwShare - p.critShare) * s.pubShare, days: p.publicDays, worker: false });
+  return g;
+}
+function perShift(p) { return { strict: p.perDayStrict, shift: p.perDayShift, extended: p.perDayExtended }[s.reuse]; }
+function surgeOf(p) { return s.buying === 'outbreak' ? p.surge : 1; }
+
+function populationCost(p, type) {
+  const surge = surgeOf(p), months = s.months;
+  const out = { groups: [], resp: 0, cons: 0, fit: 0, log: 0, units: 0, people: 0, personDays: 0 };
+  for (const g of groupsOf(p)) {
+    let units, resp, cons = 0;
+    if (type === 'disposable') {
+      units = g.n * g.days * months * perShift(p);
+      resp = units * p.priceN95 * surge;
+    } else {
+      units = g.n * p.spares;
+      resp = units * TYPES[type].price(p) * surge;
+      cons = type === 'elastomeric' ? g.n * months * p.filtersPerMonth * p.priceFilter * surge : g.n * months * p.paprPerMonth * surge;
+    }
+    const fit = g.worker ? g.n * ((type === 'papr' ? 0 : p.fitTest) + p.training) : 0;
+    const log = (resp + cons) * p.logisticsPct;
+    out.groups.push({ label: g.label, n: g.n, units, cost: resp + cons + fit + log });
+    out.resp += resp; out.cons += cons; out.fit += fit; out.log += log;
+    out.units += units; out.people += g.n; out.personDays += g.n * g.days * months;
+  }
+  out.total = out.resp + out.cons + out.fit + out.log;
+  const rep = { disposable: p.replaceDisposable, elastomeric: p.replaceElasto, papr: p.replacePAPR }[type];
+  out.upkeep = (out.resp + out.cons) / surge * rep;
+  return out;
+}
+
+function maskCost(p, type) {
+  const surge = surgeOf(p), N = s.masks, months = s.months;
+  const out = { resp: N * TYPES[type].price(p) * surge, cons: 0, fit: 0, units: N };
+  if (type === 'disposable') {
+    out.shifts = N / perShift(p);
+    out.people = out.shifts / (p.workDays * months);
+  } else {
+    out.people = N / p.spares;
+    out.cons = type === 'elastomeric' ? out.people * months * p.filtersPerMonth * p.priceFilter * surge : out.people * months * p.paprPerMonth * surge;
+  }
+  out.log = (out.resp + out.cons) * p.logisticsPct;
+  out.total = out.resp + out.cons + out.log;
+  return out;
+}
+
+// cumulative cost at month m: one-off costs up front, consumables (or disposables) spread evenly
+function curve(p, type) {
+  const r = populationCost(p, type), L = 1 + p.logisticsPct, M = s.months;
+  const upfront = r.fit + (type === 'disposable' ? 0 : r.resp * L);
+  const monthly = (type === 'disposable' ? r.resp + r.cons : r.cons) * L / M;
+  return Array.from({ length: M + 1 }, (_, m) => upfront + monthly * m);
+}
+
+// ---------- Formatting ----------
+function money(v) {
+  const a = Math.abs(v);
+  if (a >= 1e12) return '$' + (v / 1e12).toFixed(1) + 'T';
+  if (a >= 1e9) return '$' + (v / 1e9).toFixed(a >= 1e10 ? 0 : 1) + 'B';
+  if (a >= 1e6) return '$' + (v / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M';
+  if (a >= 1e3) return '$' + (v / 1e3).toFixed(a >= 1e4 ? 0 : 1) + 'K';
+  return v === 0 ? '$0' : '$' + v.toFixed(a < 10 ? 2 : 0);
+}
+function count(v) {
+  const a = Math.abs(v);
+  if (a >= 1e9) return (v / 1e9).toFixed(1) + 'B';
+  if (a >= 1e6) return (v / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M';
+  if (a >= 1e4) return Math.round(v / 1e3) + 'K';
+  return Math.round(v).toLocaleString('en-US');
+}
+function fmtVal(a, v) {
+  if (a.unit === 'pct') return +(v * 100).toPrecision(3) + '%';
+  if (a.unit === 'usd') return '$' + +v.toPrecision(3);
+  if (a.unit === 'x') return +v.toPrecision(3) + '×';
+  return String(+v.toPrecision(3));
+}
+const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// ---------- Rendering ----------
+let summary = '';
+function render() {
+  document.querySelectorAll('[data-show]').forEach(el => { el.hidden = !el.dataset.show.split(' ').includes(s.mode); });
+  $('reuse-wrap').hidden = s.type !== 'disposable';
+  $('pub-wrap').hidden = !s.pub;
+  $('monthsOut').textContent = s.months;
+  $('pubShareOut').textContent = Math.round(s.pubShare * 100) + '%';
+  const pm = params('mid'), pl = params('low'), ph = params('high');
+  $('buying-hint').textContent = s.buying === 'outbreak'
+    ? `Prices assumed ${fmtVal(AID.surge, pm.surge)} normal, as in 2020.`
+    : 'Bought at normal prices and stored. Stock that expires has to be replaced.';
+  const allG = { hcw: s.pop * pm.hcwShare, crit: s.pop * pm.critShare, pub: s.pop * (1 - pm.hcwShare - pm.critShare) * s.pubShare };
+  for (const k in allG) $('n-' + k).textContent = count(allG[k]);
+  renderTypes(pm);
+
+  const t = TYPES[s.type];
+  let mid, lo, hi, stats = [], bars = [], sentence;
+  if (s.mode === 'masks') {
+    mid = maskCost(pm, s.type); lo = maskCost(pl, s.type); hi = maskCost(ph, s.type);
+    $('h-label').textContent = 'Cost of ' + count(s.masks) + ' ' + t.short;
+    sentence = s.type === 'disposable'
+      ? `${count(s.masks)} ${t.short} last about ${count(mid.shifts)} shifts. That's ${count(mid.people)} workers for ${s.months} month${s.months > 1 ? 's' : ''}.`
+      : `${count(s.masks)} ${t.short} equip about ${count(mid.people)} people. Over ${s.months} month${s.months > 1 ? 's' : ''} they also need ${money(mid.cons)} of ${s.type === 'papr' ? 'filters and batteries' : 'replacement filters'}.`;
+    stats = [
+      [money(mid.resp), 'Respirators'],
+      [money(mid.total / Math.max(mid.people, 1)), `Per person over ${s.months} months`],
+      [count(mid.people), 'People covered'],
+      [s.type === 'disposable' ? money(TYPES.disposable.price(pm) * surgeOf(pm)) : money(TYPES[s.type].price(pm) * surgeOf(pm)), 'Price per unit'],
+    ];
+    bars = [['Respirators', mid.resp], ['Filters and parts', mid.cons], ['Storage and distribution', mid.log]];
+  } else {
+    mid = populationCost(pm, s.type); lo = populationCost(pl, s.type); hi = populationCost(ph, s.type);
+    const per = mid.total / Math.max(mid.people, 1);
+    if (s.mode === 'budget') {
+      const covered = Math.min(s.budget / per, mid.people);
+      const share = covered / Math.max(mid.people, 1);
+      $('h-label').textContent = 'People a ' + money(s.budget) + ' budget covers';
+      sentence = mid.people === 0 ? 'Choose at least one group.'
+        : share >= 1 ? `${money(s.budget)} covers everyone you selected (${count(mid.people)} people) for ${s.months} months with ${t.short}, with ${money(s.budget - mid.total)} left over.`
+        : `${money(s.budget)} covers about ${Math.round(share * 100)}% of the ${count(mid.people)} people you selected, for ${s.months} months with ${t.short}. Covering all of them costs ${money(mid.total)}.`;
+      const cl = Math.min(s.budget / (hi.total / Math.max(hi.people, 1)), hi.people), ch = Math.min(s.budget / (lo.total / Math.max(lo.people, 1)), lo.people);
+      mid = { ...mid, _head: covered, _lo: cl, _hi: ch };
+    } else {
+      $('h-label').textContent = 'Estimated cost';
+      sentence = mid.people === 0 ? 'Choose at least one group.'
+        : `Equipping ${count(mid.people)} people with ${t.short} for ${s.months} month${s.months > 1 ? 's' : ''}.`;
+    }
+    stats = [
+      [count(mid.people), 'People covered'],
+      [count(mid.units), s.type === 'disposable' ? 'Disposables to buy' : 'Respirators to buy'],
+      [money(per), 'Per person covered'],
+      [money(mid.total / Math.max(mid.personDays, 1)), 'Per protected person-day'],
+    ];
+    if (s.buying === 'stockpile') stats.push([money(mid.upkeep) + '/yr', 'To keep the stockpile in date']);
+    bars = [['Respirators', mid.resp], [s.type === 'papr' ? 'Filters, batteries, hoods' : 'Replacement filters', mid.cons], ['Fit testing and training', mid.fit], ['Storage and distribution', mid.log]];
+    if (s.type === 'disposable') bars.splice(1, 1);
+  }
+
+  // headline
+  const isBudget = s.mode === 'budget';
+  const head = isBudget ? mid._head : mid.total, hLo = isBudget ? mid._lo : lo.total, hHi = isBudget ? mid._hi : hi.total;
+  $('h-total').textContent = isBudget ? count(head) : money(head);
+  $('h-sentence').textContent = sentence;
+  $('h-range').textContent = `Range ${isBudget ? count(hLo) : money(hLo)} to ${isBudget ? count(hHi) : money(hHi)}, using the low and high assumptions.`;
+  const max = Math.max(hHi, 1);
+  const rb = $('h-rangebar');
+  rb.querySelector('span').style.cssText = `left:${hLo / max * 100}%;width:${(hHi - hLo) / max * 100}%`;
+  rb.querySelector('i').style.left = `calc(${head / max * 100}% - 1px)`;
+
+  $('stats').innerHTML = stats.map(([v, k]) => `<div class="stat"><span class="v">${esc(v)}</span><span class="k">${esc(k)}</span></div>`).join('');
+  const bt = bars.reduce((x, b) => x + b[1], 0) || 1;
+  $('breakdown').innerHTML = bars.map(([n, v]) => `<div class="bar"><span class="n">${esc(n)}</span><span class="val">${money(v)}</span><span class="t"><span style="width:${v / bt * 100}%"></span></span></div>`).join('');
+
+  const showPop = s.mode !== 'masks';
+  $('groups-card').hidden = !showPop;
+  $('chart-card').hidden = !showPop;
+  if (showPop) {
+    $('groups').innerHTML = `<thead><tr><th>Group</th><th class="r">People</th><th class="r">${s.type === 'disposable' ? 'Disposables' : 'Units'}</th><th class="r">Cost</th></tr></thead><tbody>` +
+      mid.groups.map(g => `<tr><td>${g.label}</td><td class="r">${count(g.n)}</td><td class="r">${count(g.units)}</td><td class="r">${money(g.cost)}</td></tr>`).join('') +
+      `</tbody><tfoot><tr><td>Total</td><td class="r">${count(mid.people)}</td><td class="r">${count(mid.units)}</td><td class="r">${money(mid.total)}</td></tr></tfoot>`;
+    if (s.pub && s.type === 'papr') $('groups').insertAdjacentHTML('beforeend', `<caption class="note" style="caption-side:bottom;text-align:left;padding-top:.6rem">PAPRs for the general public are unrealistic. This row is shown only for comparison.</caption>`);
+    renderChart(pm);
+  }
+
+  summary = [
+    'Respirator cost estimate (rough v1, placeholder assumptions)',
+    $('h-label').textContent + ': ' + $('h-total').textContent,
+    sentence,
+    $('h-range').textContent,
+    s.mode !== 'masks' ? `Population ${count(s.pop)}${s.country !== 'custom' ? ' (' + COUNTRIES.find(c => c.id === s.country).name + ')' : ''}. Buying: ${s.buying === 'outbreak' ? 'during an outbreak' : 'stockpiled ahead'}.` : '',
+    ...bars.map(([n, v]) => `- ${n}: ${money(v)}`),
+  ].filter(Boolean).join('\n');
+}
+
+function renderTypes(p) {
+  const surge = surgeOf(p);
+  const el = $('types');
+  if (!el.children.length) {
+    el.innerHTML = Object.entries(TYPES).map(([k, t]) =>
+      `<input type="radio" name="type" id="t-${k}" value="${k}"${k === s.type ? ' checked' : ''}><label for="t-${k}"><span class="sw" style="background:${t.color}"></span><span>${t.name}</span><span class="p" id="tp-${k}"></span><span class="d">${t.desc}</span></label>`).join('');
+  }
+  for (const k in TYPES) $('tp-' + k).textContent = money(TYPES[k].price(p) * surge) + ' each';
+}
+
+function renderChart(p) {
+  const series = Object.keys(TYPES).map(k => ({ k, pts: curve(p, k) }));
+  const W = 600, H = 240, L = 56, R = 16, T = 12, B = 28, M = s.months;
+  const ymax = Math.max(...series.map(x => x.pts[M]), 1);
+  const nice = niceMax(ymax);
+  const x = m => L + (W - L - R) * (m / M), y = v => T + (H - T - B) * (1 - v / nice);
+  let g = '';
+  for (let i = 0; i <= 4; i++) { const v = nice * i / 4; g += `<line class="gl" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${money(v)}</text>`; }
+  const step = M <= 12 ? (M <= 6 ? 1 : 3) : 6;
+  for (let m = 0; m <= M; m += step) g += `<text x="${x(m)}" y="${H - 8}" text-anchor="middle">${m === 0 ? 'start' : m + ' mo'}</text>`;
+  for (const sr of series) {
+    const d = sr.pts.map((v, m) => `${m ? 'L' : 'M'}${x(m).toFixed(1)},${y(v).toFixed(1)}`).join('');
+    const w = sr.k === s.type ? 3 : 1.75;
+    g += `<path d="${d}" fill="none" stroke="${TYPES[sr.k].color}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"${sr.k === s.type ? '' : ' opacity=".7"'}/>`;
+    g += `<circle cx="${x(M)}" cy="${y(sr.pts[M])}" r="${sr.k === s.type ? 4 : 3}" fill="${TYPES[sr.k].color}"/>`;
+  }
+  $('chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cumulative cost over ${M} months for each respirator type">${g}</svg>`;
+  $('legend').innerHTML = series.map(sr => `<span><i style="background:${TYPES[sr.k].color}"></i>${TYPES[sr.k].name}: ${money(sr.pts[M])}</span>`).join('');
+  const d = series[0].pts, e = series[1].pts;
+  const cross = e.findIndex((v, m) => m > 0 && v <= d[m]);
+  $('crossover').textContent = cross === -1
+    ? `Within ${M} months, elastomerics never become cheaper than disposables under these assumptions.`
+    : cross <= 1 ? 'Elastomerics are cheaper than disposables from the first month.'
+    : `Elastomerics become cheaper than disposables after about ${cross} months.`;
+}
+function niceMax(v) {
+  const e = Math.pow(10, Math.floor(Math.log10(v))), f = v / e;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e;
+}
+
+function renderAssumptions() {
+  let html = '<thead><tr><th>Assumption</th><th>Value</th><th class="r">Low</th><th class="r">High</th><th>Source</th></tr></thead><tbody>';
+  let grp = '';
+  for (const a of A) {
+    if (a.group !== grp) { grp = a.group; html += `<tr class="grp"><td colspan="5">${esc(grp)}</td></tr>`; }
+    const shown = a.unit === 'pct' ? +(vals[a.id] * 100).toPrecision(4) : +vals[a.id].toPrecision(4);
+    const k = vals[a.id] / a.mid;
+    const edited = Math.abs(k - 1) > 1e-9;
+    html += `<tr><td>${esc(a.label)}${a.note ? `<div class="hint">${esc(a.note)}</div>` : ''}</td>
+      <td style="white-space:nowrap"><input type="number" id="a-${a.id}" data-id="${a.id}" value="${shown}" step="any" min="0" aria-label="${esc(a.label)}"><span class="unit">${{ pct: '%', usd: 'USD', x: '×', num: '' }[a.unit]}</span></td>
+      <td class="r">${fmtVal(a, a.low * k)}</td><td class="r">${fmtVal(a, a.high * k)}</td>
+      <td>${edited ? '<span class="pill edited">Edited</span>' : a.source ? `${esc(a.source)}${a.checked ? `<div class="hint">Checked ${esc(a.checked)}</div>` : ''}` : '<span class="pill">Placeholder</span>'}</td></tr>`;
+  }
+  $('atable').innerHTML = html + '</tbody>';
+}
+
+// ---------- Wiring ----------
+function applyScenario(id) {
+  const sc = SCENARIOS[id]; if (!sc) return;
+  Object.assign(s, sc);
+  $('months').value = s.months; $('g-hcw').checked = s.hcw; $('g-crit').checked = s.crit; $('g-pub').checked = s.pub; $('pubShare').value = s.pubShare * 100;
+}
+function applyCountry(id) {
+  const c = COUNTRIES.find(c => c.id === id);
+  s.country = id;
+  if (id !== 'custom') { s.pop = c.pop; $('pop').value = c.pop; }
+  setHcwBase(HCW_BY_INCOME[c.inc]);
+  renderAssumptions();
+}
+
+$('country').innerHTML = COUNTRIES.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+$('country').value = s.country;
+applyCountry(s.country);
+
+const form = $('settings');
+form.addEventListener('submit', e => e.preventDefault());
+form.addEventListener('input', e => {
+  const t = e.target;
+  if (t.name === 'mode') s.mode = t.value;
+  else if (t.name === 'type') s.type = t.value;
+  else if (t.name === 'reuse') s.reuse = t.value;
+  else if (t.name === 'buying') s.buying = t.value;
+  else if (t.id === 'masks') s.masks = Math.max(0, +t.value || 0);
+  else if (t.id === 'budget') s.budget = Math.max(0, +t.value || 0);
+  else if (t.id === 'country') applyCountry(t.value);
+  else if (t.id === 'pop') { s.pop = Math.max(0, +t.value || 0); if (s.country !== 'custom') { s.country = 'custom'; $('country').value = 'custom'; } }
+  else if (t.id === 'scenario') applyScenario(t.value);
+  else {
+    if (t.id === 'months') s.months = +t.value;
+    else if (t.id === 'g-hcw') s.hcw = t.checked;
+    else if (t.id === 'g-crit') s.crit = t.checked;
+    else if (t.id === 'g-pub') s.pub = t.checked;
+    else if (t.id === 'pubShare') s.pubShare = t.value / 100;
+    if (s.mode !== 'masks' || t.id !== 'months') $('scenario').value = 'custom';
+  }
+  render();
+});
+
+$('atable').addEventListener('change', e => {
+  const id = e.target.dataset.id; if (!id) return;
+  const a = AID[id], raw = +e.target.value;
+  if (!(raw >= 0)) { renderAssumptions(); return; }
+  vals[id] = a.unit === 'pct' ? raw / 100 : raw;
+  if (id === 'hcwShare' && vals[id] === 0) vals[id] = 1e-6;
+  renderAssumptions(); render();
+});
+$('reset').addEventListener('click', () => {
+  for (const a of A) vals[a.id] = a.mid;
+  renderAssumptions(); render();
+});
+$('copy').addEventListener('click', () => {
+  const done = msg => { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(done.t); done.t = setTimeout(() => t.hidden = true, 2200); };
+  try {
+    navigator.clipboard.writeText(summary).then(() => done('Copied'), () => done('Copy failed. Select the text above instead.'));
+  } catch (_) { done('Copy failed. Select the text above instead.'); }
+});
+
+render();
+</script>
