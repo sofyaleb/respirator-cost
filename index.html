@@ -28,12 +28,6 @@
   * { box-sizing: border-box; }
   body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
   .wrap { max-width: 72rem; margin-inline: auto; padding-block: 1.5rem 4rem; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 2rem; }
-  .top { display: flex; justify-content: space-between; align-items: center; gap: 1rem; font-size: .875rem; flex-wrap: wrap; }
-  .brand { font-weight: 600; letter-spacing: -.01em; }
-  .links { display: flex; gap: 1.1rem; flex-wrap: wrap; }
-  .links a { color: var(--ink-soft); text-decoration: none; border-bottom: 1px solid var(--line); padding-bottom: 1px; }
-  .links a:hover, .links a:focus-visible { color: var(--ink); border-color: var(--ink); }
-  .links a[aria-current="page"] { color: var(--ink); border-color: transparent; }
   header { display: grid; gap: .8rem; }
   h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.05; letter-spacing: -.03em; font-weight: 500; margin: 0; text-wrap: balance; max-width: 20ch; }
   .lede { color: var(--ink-soft); max-width: 58ch; margin: 0; }
@@ -132,16 +126,6 @@
 </style>
 
 <div class="wrap">
-  <nav class="top">
-    <span class="brand">Respirator Guide</span>
-    <span class="links">
-      <a href="https://sofyaleb.github.io/respirator-guide/" target="_blank" rel="noopener">Mask picker</a>
-      <a href="https://sofyaleb.github.io/respirator-guide/explain.html" target="_blank" rel="noopener">How protection works</a>
-      <a href="https://sofyaleb.github.io/respirator-guide/details.html" target="_blank" rel="noopener">Details</a>
-      <a href="./" aria-current="page">Cost estimator</a>
-    </span>
-  </nav>
-
   <header>
     <h1>What would it cost to protect your workforce?</h1>
     <p class="lede">Choose a country or population, who needs protecting, for how long and with which respirator. You get a cost estimate, a range, and every assumption behind it.</p>
