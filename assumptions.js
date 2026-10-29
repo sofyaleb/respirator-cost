@@ -49,3 +49,18 @@ const SCENARIOS = {
 // for a country we know nothing about except its population. Treated as log-normal:
 // `median` is the middle estimate, `low90` and `high90` bound the 90% interval.
 const HCW_ESTIMATE = { median: 0.015, low90: 0.005, high90: 0.045 };
+
+// Stockpile (index.html, step 2): one year of protection for the estimated healthcare workers.
+// Main kit is a reusable half mask per worker, with N95 / FFP2s (head straps) as a backup supply.
+// Mask prices match the respirator guide (~$1 per N95 / FFP2, ~$40 per half mask). Filter price is a placeholder.
+const STOCKPILE = {
+  months: 12,              // how long the stockpile should last
+  shiftsPerMonth: 21,      // shifts per worker per month
+  n95PerShift: 1,          // disposables used per shift when wearing N95s
+  n95Price: 1,             // N95 / FFP2 with head straps, each
+  halfMaskPrice: 40,       // reusable half mask, each
+  spares: 1.1,             // half masks bought per worker (spares, size mix)
+  filterPairsPerYear: 4,   // a fresh filter pair every 3 months
+  filterPairPrice: 10,     // placeholder
+  backupMonths: 1,         // months of N95s kept as backup
+};
