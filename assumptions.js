@@ -50,17 +50,33 @@ const SCENARIOS = {
 // `median` is the middle estimate, `low90` and `high90` bound the 90% interval.
 const HCW_ESTIMATE = { median: 0.015, low90: 0.005, high90: 0.045 };
 
-// Stockpile (index.html, step 2): one year of protection for the estimated healthcare workers.
-// Main kit is a reusable half mask per worker, with N95 / FFP2s (head straps) as a backup supply.
-// Mask prices match the respirator guide (~$1 per N95 / FFP2, ~$40 per half mask). Filter price is a placeholder.
+// Other critical workers (utilities, food, transport, police), same log-normal treatment. Placeholder.
+const CRIT_ESTIMATE = { median: 0.08, low90: 0.04, high90: 0.16 };
+
+// Stockpile (index.html, step 2): enough for one year of an outbreak for healthcare and other critical workers.
+// Rotated first in, first out: built up by buying 1/rotationYears of it each year, then the same amount every year
+// after, with the oldest stock handed out for everyday use before it expires.
 const STOCKPILE = {
-  months: 12,              // how long the stockpile should last
+  months: 12,              // how long the stockpile should last in an outbreak
   shiftsPerMonth: 21,      // shifts per worker per month
-  n95PerShift: 1,          // disposables used per shift when wearing N95s
-  n95Price: 1,             // N95 / FFP2 with head straps, each
-  halfMaskPrice: 40,       // reusable half mask, each
-  spares: 1.1,             // half masks bought per worker (spares, size mix)
+  rotationYears: 5,        // 5 years = buy 20% of the stockpile each year
+  spares: 1.1,             // reusable masks bought per worker (spares, size mix)
   filterPairsPerYear: 4,   // a fresh filter pair every 3 months
   filterPairPrice: 10,     // placeholder
-  backupMonths: 1,         // months of N95s kept as backup
 };
+
+// Masks the options can use. Protection factors and prices match the respirator guide.
+// perShift: disposables used per shift. filters: uses filter pairs. perYear: other running costs per worker.
+const MASKS = {
+  n95:  { name: 'N95 / FFP2 with head straps', pf: 10, price: 1, perShift: 1 },
+  half: { name: 'Reusable half mask', pf: 20, price: 40, filters: true },
+  full: { name: 'Full-face mask', pf: 40, price: 200, filters: true },
+  papr: { name: 'Powered hood (PAPR)', pf: 25, price: 1500, perYear: 180 },
+};
+
+// The three stockpile options: share of workers equipped with each mask. Each adds up to 1.
+const PORTFOLIOS = [
+  { id: 'a', name: 'Basic', mix: { n95: 1 } },
+  { id: 'b', name: 'Balanced', mix: { n95: 0.8, half: 0.2 } },
+  { id: 'c', name: 'High protection', mix: { n95: 0.7, half: 0.2, full: 0.09, papr: 0.01 } },
+];

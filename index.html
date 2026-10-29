@@ -12,18 +12,21 @@
   :root {
     --bg: #f4f6f6; --surface: #ffffff; --ink: #142024; --ink-soft: #5a686d; --line: #dde3e4;
     --accent: #0e7c74; --accent-soft: #d5ecea; --band: rgba(14,124,116,.28); --tail: rgba(14,124,116,.10);
+    --m-n95: #d98a1c; --m-half: #0e7c74; --m-full: #3a6fb5; --m-papr: #6b5bb0;
     --font: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #0f1517; --surface: #172023; --ink: #e9efef; --ink-soft: #95a3a7; --line: #273235;
       --accent: #3cc2b5; --accent-soft: #163b38; --band: rgba(60,194,181,.32); --tail: rgba(60,194,181,.10);
+      --m-n95: #f0a83c; --m-half: #3cc2b5; --m-full: #7aa7f0; --m-papr: #a99bff;
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
     --bg: #0f1517; --surface: #172023; --ink: #e9efef; --ink-soft: #95a3a7; --line: #273235;
     --accent: #3cc2b5; --accent-soft: #163b38; --band: rgba(60,194,181,.32); --tail: rgba(60,194,181,.10);
+      --m-n95: #f0a83c; --m-half: #3cc2b5; --m-full: #7aa7f0; --m-papr: #a99bff;
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
@@ -86,8 +89,21 @@
   .kit .item { font-weight: 500; }
   .kit .sub { grid-column: 1; font-size: .85rem; color: var(--ink-soft); }
   .kit .amt { grid-row: 1 / 3; grid-column: 2; align-self: center; text-align: right; font-weight: 500; }
-  .compare { font-size: 1rem; max-width: 52ch; }
-  .compare b { font-weight: 600; }
+  .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+  @media (max-width: 640px) { .options { grid-template-columns: 1fr; } }
+  .opt { font: inherit; color: var(--ink); text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 1rem; display: grid; grid-template-rows: auto auto 1fr auto auto; gap: .55rem; cursor: pointer; min-width: 0; }
+  .opt:hover { border-color: var(--ink-soft); }
+  .opt[aria-checked="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+  .opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .opt .name { font-weight: 600; }
+  .opt .mixbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; }
+  .opt .mixbar i { display: block; height: 100%; }
+  .opt .mixtext { font-size: .8rem; color: var(--ink-soft); line-height: 1.4; }
+  .opt .yr { font-size: 1.7rem; font-weight: 500; letter-spacing: -.03em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .opt .yr small { font-size: .85rem; font-weight: 400; letter-spacing: 0; color: var(--ink-soft); }
+  .opt .meta { font-size: .82rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; display: grid; gap: .1rem; }
+  .opt .meta b { color: var(--ink); font-weight: 500; }
+  .kit .sw { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: .45rem; }
   .flag { display: inline-block; font-size: .75rem; padding: .1rem .55rem; border-radius: 999px; background: var(--accent-soft); color: var(--ink); }
 </style>
 
@@ -126,16 +142,15 @@
 
   <section class="cost" id="cost" aria-live="polite">
     <h2 class="step-q">What would it cost to protect them?</h2>
-    <p class="lead" id="c-lead">A one-year stockpile for 150,000 healthcare workers costs about</p>
-    <p class="num" id="c-total">$16M</p>
-    <p class="range" id="c-range"></p>
+    <p class="lead" id="c-lead"></p>
+    <div class="options" id="options" role="radiogroup" aria-label="Stockpile options"></div>
     <div class="kit" id="c-kit"></div>
-    <p class="compare" id="c-compare"></p>
-    <p class="hint">Every worker gets a reusable half mask, which seals well and lasts for years. N95 or FFP2s with head straps cover the gaps: new staff, lost masks, or a filter that runs out. Prices are typical retail prices, so a bulk order should cost less. All numbers are placeholders.</p>
+    <p class="range" id="c-range"></p>
+    <p class="hint" id="c-how"></p>
   </section>
 </main>
 
-<script src="assumptions.js?v=3"></script>
+<script src="assumptions.js?v=4"></script>
 <script>
 const E = HCW_ESTIMATE;
 const Z90 = 1.6449;
@@ -175,7 +190,7 @@ function render() {
     `${full(pop)} people × ${pct(E.median)} = <b>${full(mid)}</b> healthcare workers<br>` +
     `90% interval: ${pct(E.low90)} to ${pct(E.high90)} of the population = ${full(lo)} to ${full(hi)}`;
   drawCurve(mid, lo, hi);
-  renderCost(round2(mid), lo, hi);
+  renderCost(pop);
 }
 
 function money(v) {
@@ -184,29 +199,63 @@ function money(v) {
   if (v >= 1e3) return '$' + +(v / 1e3).toPrecision(2) + 'K';
   return '$' + Math.round(v);
 }
-// What to buy for `workers`: one half mask each (plus spares), a year of filters, and a month of N95s as backup.
-function stockpile(workers) {
-  const P = STOCKPILE;
-  const halfMasks = round2(workers * P.spares);
-  const filters = round2(workers * P.filterPairsPerYear * P.months / 12);
-  const n95s = round2(workers * P.shiftsPerMonth * P.backupMonths * P.n95PerShift);
-  const rows = [
-    { item: 'Reusable half masks', sub: `One per worker, plus ${Math.round((P.spares - 1) * 100)}% spares · ${full(halfMasks)} × $${P.halfMaskPrice}`, cost: halfMasks * P.halfMaskPrice },
-    { item: 'Filter pairs', sub: `A fresh pair every ${12 / P.filterPairsPerYear} months · ${full(filters)} × $${P.filterPairPrice}`, cost: filters * P.filterPairPrice },
-    { item: 'N95 / FFP2s with head straps', sub: `${P.backupMonths} month of backup, one per shift · ${full(n95s)} × $${P.n95Price}`, cost: n95s * P.n95Price },
-  ];
-  return { rows, total: rows.reduce((t, r) => t + r.cost, 0) };
+// Per worker, for the outbreak length: how many of a mask to stock and what it costs.
+function perWorker(key) {
+  const P = STOCKPILE, m = MASKS[key], yrs = P.months / 12;
+  if (m.perShift) { const units = P.shiftsPerMonth * P.months * m.perShift; return { units, cost: units * m.price }; }
+  let cost = P.spares * m.price;
+  if (m.filters) cost += P.filterPairsPerYear * yrs * P.filterPairPrice;
+  if (m.perYear) cost += m.perYear * yrs;
+  return { units: P.spares, cost };
 }
-function renderCost(workers, lo, hi) {
-  const P = STOCKPILE, s = stockpile(workers);
-  $('c-lead').textContent = `A ${P.months === 12 ? 'one-year' : P.months + '-month'} stockpile for ${full(workers)} healthcare workers costs about`;
-  $('c-total').textContent = money(s.total);
-  $('c-range').innerHTML = `For ${full(lo)} to ${full(hi)} workers: <b>${money(stockpile(lo).total)}</b> to <b>${money(stockpile(hi).total)}</b>.`;
-  $('c-kit').innerHTML = s.rows.map(r => `<div class="row"><span class="item">${r.item}</span><span class="sub">${r.sub}</span><span class="amt">${money(r.cost)}</span></div>`).join('') +
-    `<div class="row"><span class="item">Total</span><span class="amt">${money(s.total)}</span></div>`;
-  const n95Only = workers * P.shiftsPerMonth * P.months * P.n95PerShift * P.n95Price;
-  $('c-compare').innerHTML = `Using only N95 / FFP2s for the year would cost about <b>${money(n95Only)}</b>, ${(n95Only / s.total).toFixed(1)} times as much, because a new one is used every shift.`;
+function option(pf, workers) {
+  const rows = Object.entries(pf.mix).map(([k, share]) => {
+    const n = workers * share, w = perWorker(k);
+    return { key: k, share, people: n, units: round2(n * w.units), cost: n * w.cost };
+  });
+  const full = rows.reduce((t, r) => t + r.cost, 0);
+  // average protection: what gets in averages over 1/PF, so combine as a harmonic mean
+  const protect = 1 / rows.reduce((t, r) => t + r.share / MASKS[r.key].pf, 0);
+  return { rows, full, yearly: full / STOCKPILE.rotationYears, protect };
 }
+const MIXLABEL = { n95: 'N95 / FFP2', half: 'half mask', full: 'full-face', papr: 'powered hood' };
+const pctMix = v => +(v * 100).toPrecision(2) + '%';
+let chosen = 'b', last = null;
+function renderCost(pop) {
+  const C = CRIT_ESTIMATE, P = STOCKPILE;
+  const hcw = round2(pop * E.median), crit = round2(pop * C.median), workers = hcw + crit;
+  const lo = pop * (E.low90 + C.low90), hi = pop * (E.high90 + C.high90);
+  last = pop;
+  $('c-lead').innerHTML = `A stockpile for <b>${full(hcw)}</b> healthcare workers and about <b>${full(crit)}</b> other critical workers, enough for ${P.months === 12 ? 'one year' : P.months + ' months'} of an outbreak. Pick an option:`;
+  $('options').innerHTML = PORTFOLIOS.map(pf => {
+    const o = option(pf, workers);
+    const bar = Object.entries(pf.mix).map(([k, v]) => `<i style="width:${v * 100}%;background:var(--m-${k})"></i>`).join('');
+    const mix = Object.entries(pf.mix).map(([k, v]) => `${pctMix(v)} ${MIXLABEL[k]}`).join(', ');
+    return `<button type="button" class="opt" role="radio" aria-checked="${pf.id === chosen}" data-id="${pf.id}">
+      <span class="name">${pf.name}</span>
+      <span class="mixbar">${bar}</span>
+      <span class="mixtext">${mix}</span>
+      <span class="yr">${money(o.yearly)}<small> a year</small></span>
+      <span class="meta"><span>Full stockpile <b>${money(o.full)}</b></span><span>Protection <b>about ${Math.round(o.protect)}×</b></span></span>
+    </button>`;
+  }).join('');
+  const pf = PORTFOLIOS.find(p => p.id === chosen), o = option(pf, workers);
+  const yrs = P.rotationYears;
+  $('c-kit').innerHTML = o.rows.map(r => {
+    const m = MASKS[r.key];
+    const what = m.perShift ? `${full(r.units)} masks, one per shift` : m.perYear ? `${full(r.units)} units plus batteries and hoods` : `${full(r.units)} masks plus filters`;
+    return `<div class="row"><span class="item"><span class="sw" style="background:var(--m-${r.key})"></span>${m.name}</span><span class="sub">${pctMix(r.share)} of workers · ${what}</span><span class="amt">${money(r.cost)}</span></div>`;
+  }).join('') +
+    `<div class="row"><span class="item">Full stockpile</span><span class="amt">${money(o.full)}</span></div>` +
+    `<div class="row"><span class="item">Yearly spend, buying ${Math.round(100 / yrs)}% a year</span><span class="amt">${money(o.yearly)}</span></div>`;
+  $('c-range').innerHTML = `For ${full(lo)} to ${full(hi)} workers, the ${pf.name.toLowerCase()} option costs <b>${money(option(pf, lo).yearly)}</b> to <b>${money(option(pf, hi).yearly)}</b> a year.`;
+  $('c-how').textContent = `First in, first out: buy ${Math.round(100 / yrs)}% of the stockpile each year, so it's full after ${yrs} years. After that, keep buying ${Math.round(100 / yrs)}% a year and hand the oldest masks out for everyday use before they expire, so the yearly spend stays the same and nothing goes to waste. Protection is the average across everyone in the option. All numbers are placeholders.`;
+}
+$('options').addEventListener('click', e => {
+  const b = e.target.closest('.opt'); if (!b) return;
+  chosen = b.dataset.id; renderCost(last);
+  $('options').querySelector(`[data-id="${chosen}"]`).focus();
+});
 
 // Density of a log-normal, drawn on a log axis, so it reads as a bell curve.
 function drawCurve(mid, lo, hi) {
