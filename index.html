@@ -89,7 +89,7 @@
   .kit .item { font-weight: 500; }
   .kit .sub { grid-column: 1; font-size: .85rem; color: var(--ink-soft); }
   .kit .amt { grid-row: 1 / 3; grid-column: 2; align-self: center; text-align: right; font-weight: 500; }
-  .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+  .options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
   @media (max-width: 640px) { .options { grid-template-columns: 1fr; } }
   .opt { font: inherit; color: var(--ink); text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 1rem; display: grid; grid-template-rows: auto auto 1fr auto auto; gap: .55rem; cursor: pointer; min-width: 0; }
   .opt:hover { border-color: var(--ink-soft); }
@@ -103,6 +103,17 @@
   .opt .yr small { font-size: .85rem; font-weight: 400; letter-spacing: 0; color: var(--ink-soft); }
   .opt .meta { font-size: .82rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; display: grid; gap: .1rem; }
   .opt .meta b { color: var(--ink); font-weight: 500; }
+  .opt.own .name::after { content: " · drag to set"; font-weight: 400; color: var(--ink-soft); font-size: .82rem; }
+  .mixer { background: var(--surface); border-radius: 18px; padding: 1rem 1.2rem; display: grid; gap: .8rem; border: 1px solid var(--ink); }
+  .mixer .mx-title { font-size: .9rem; color: var(--ink-soft); }
+  .mx-row { display: grid; grid-template-columns: minmax(7.5rem, 11rem) minmax(0, 1fr) 3rem; gap: .8rem; align-items: center; font-size: .9rem; }
+  .mx-row label { display: flex; align-items: center; min-width: 0; }
+  .mx-row input { width: 100%; margin: 0; cursor: pointer; }
+  .mx-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .mx-row output { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .mx-row .fixed { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .mx-row .fixed i { display: block; height: 100%; }
+  @media (max-width: 480px) { .mx-row { grid-template-columns: 1fr 3rem; } .mx-row input, .mx-row .fixed { grid-column: 1 / 3; grid-row: 2; } }
   .kit .sw { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: .45rem; }
   .flag { display: inline-block; font-size: .75rem; padding: .1rem .55rem; border-radius: 999px; background: var(--accent-soft); color: var(--ink); }
 </style>
@@ -144,6 +155,7 @@
     <h2 class="step-q">What would it cost to protect them?</h2>
     <p class="lead" id="c-lead"></p>
     <div class="options" id="options" role="radiogroup" aria-label="Stockpile options"></div>
+    <div class="mixer" id="mixer" hidden></div>
     <div class="kit" id="c-kit"></div>
     <p class="range" id="c-range"></p>
     <p class="hint" id="c-how"></p>
@@ -221,17 +233,24 @@ function option(pf, workers) {
 const MIXLABEL = { n95: 'N95 / FFP2', half: 'half mask', full: 'full-face', papr: 'powered hood' };
 const pctMix = v => +(v * 100).toPrecision(2) + '%';
 let chosen = 'b', last = null;
+// "Your own mix": the viewer sets half mask, full-face and powered hood shares; N95 / FFP2s cover the rest.
+const custom = { half: 0.3, full: 0.05, papr: 0.01 };
+function customMix() {
+  const m = { n95: Math.max(0, 1 - custom.half - custom.full - custom.papr), ...custom };
+  return Object.fromEntries(Object.entries(m).filter(([, v]) => v > 1e-9));
+}
+const allOptions = () => [...PORTFOLIOS, { id: 'custom', name: 'Your own mix', mix: customMix() }];
 function renderCost(pop) {
   const C = CRIT_ESTIMATE, P = STOCKPILE;
   const hcw = round2(pop * E.median), crit = round2(pop * C.median), workers = hcw + crit;
   const lo = pop * (E.low90 + C.low90), hi = pop * (E.high90 + C.high90);
   last = pop;
   $('c-lead').innerHTML = `A stockpile for <b>${full(hcw)}</b> healthcare workers and about <b>${full(crit)}</b> other critical workers, enough for ${P.months === 12 ? 'one year' : P.months + ' months'} of an outbreak. Pick an option:`;
-  $('options').innerHTML = PORTFOLIOS.map(pf => {
+  $('options').innerHTML = allOptions().map(pf => {
     const o = option(pf, workers);
     const bar = Object.entries(pf.mix).map(([k, v]) => `<i style="width:${v * 100}%;background:var(--m-${k})"></i>`).join('');
     const mix = Object.entries(pf.mix).map(([k, v]) => `${pctMix(v)} ${MIXLABEL[k]}`).join(', ');
-    return `<button type="button" class="opt" role="radio" aria-checked="${pf.id === chosen}" data-id="${pf.id}">
+    return `<button type="button" class="opt${pf.id === 'custom' ? ' own' : ''}" role="radio" aria-checked="${pf.id === chosen}" data-id="${pf.id}">
       <span class="name">${pf.name}</span>
       <span class="mixbar">${bar}</span>
       <span class="mixtext">${mix}</span>
@@ -239,7 +258,8 @@ function renderCost(pop) {
       <span class="meta"><span>Full stockpile <b>${money(o.full)}</b></span><span>Protection <b>about ${Math.round(o.protect)}×</b></span></span>
     </button>`;
   }).join('');
-  const pf = PORTFOLIOS.find(p => p.id === chosen), o = option(pf, workers);
+  const pf = allOptions().find(p => p.id === chosen), o = option(pf, workers);
+  $('mixer').hidden = chosen !== 'custom';
   const yrs = P.rotationYears;
   $('c-kit').innerHTML = o.rows.map(r => {
     const m = MASKS[r.key];
@@ -248,9 +268,28 @@ function renderCost(pop) {
   }).join('') +
     `<div class="row"><span class="item">Full stockpile</span><span class="amt">${money(o.full)}</span></div>` +
     `<div class="row"><span class="item">Yearly spend, buying ${Math.round(100 / yrs)}% a year</span><span class="amt">${money(o.yearly)}</span></div>`;
-  $('c-range').innerHTML = `For ${full(lo)} to ${full(hi)} workers, the ${pf.name.toLowerCase()} option costs <b>${money(option(pf, lo).yearly)}</b> to <b>${money(option(pf, hi).yearly)}</b> a year.`;
+  $('c-range').innerHTML = `For ${full(lo)} to ${full(hi)} workers, ${pf.id === 'custom' ? 'your own mix' : 'the ' + pf.name.toLowerCase() + ' option'} costs <b>${money(option(pf, lo).yearly)}</b> to <b>${money(option(pf, hi).yearly)}</b> a year.`;
   $('c-how').textContent = `First in, first out: buy ${Math.round(100 / yrs)}% of the stockpile each year, so it's full after ${yrs} years. After that, keep buying ${Math.round(100 / yrs)}% a year and hand the oldest masks out for everyday use before they expire, so the yearly spend stays the same and nothing goes to waste. Protection is the average across everyone in the option. All numbers are placeholders.`;
 }
+// Build the mixer once so sliders keep focus while the cards above re-render.
+$('mixer').innerHTML = `<p class="mx-title">Set the share of workers on each mask. N95 / FFP2s cover everyone else.</p>` +
+  ['half', 'full', 'papr'].map(k => `<div class="mx-row">
+      <label for="mx-${k}"><span class="sw" style="background:var(--m-${k})"></span>${MASKS[k].name}</label>
+      <input type="range" id="mx-${k}" data-key="${k}" min="0" max="100" step="1" style="accent-color:var(--m-${k})">
+      <output id="mxo-${k}" for="mx-${k}"></output></div>`).join('') +
+  `<div class="mx-row"><span><span class="sw" style="background:var(--m-n95)"></span>${MASKS.n95.name}</span><span class="fixed"><i id="mx-n95bar" style="background:var(--m-n95)"></i></span><output id="mxo-n95"></output></div>`;
+function syncMixer() {
+  for (const k of ['half', 'full', 'papr']) { $('mx-' + k).value = Math.round(custom[k] * 100); $('mxo-' + k).textContent = Math.round(custom[k] * 100) + '%'; }
+  const n95 = Math.round((1 - custom.half - custom.full - custom.papr) * 100);
+  $('mxo-n95').textContent = n95 + '%'; $('mx-n95bar').style.width = n95 + '%';
+}
+$('mixer').addEventListener('input', e => {
+  const k = e.target.dataset.key; if (!k) return;
+  const others = ['half', 'full', 'papr'].filter(x => x !== k).reduce((t, x) => t + custom[x], 0);
+  custom[k] = Math.min(e.target.value / 100, 1 - others);   // shares can't add up to more than 100%
+  syncMixer(); renderCost(last);
+});
+syncMixer();
 $('options').addEventListener('click', e => {
   const b = e.target.closest('.opt'); if (!b) return;
   chosen = b.dataset.id; renderCost(last);
